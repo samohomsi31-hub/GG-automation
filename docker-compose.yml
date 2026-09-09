@@ -1,0 +1,15 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: impex
+      POSTGRES_PASSWORD: impex_dev_pw
+      POSTGRES_DB: impex_garage
+    ports:
+      - "5432:5432"
+    volumes:
+      - impex_pg_data:/var/lib/postgresql/data
+
+volumes:
+  impex_pg_data:
