@@ -23,14 +23,17 @@ declare global {
   }
 }
 
+// Set COOKIE_SECURE=true wherever the app is served over https (Render,
+// Azure, ...) so the session cookie gets the Secure flag; left unset for
+// local http:// dev.
+const COOKIE_SECURE = process.env.COOKIE_SECURE === "true";
+
 export function issueSessionCookie(res: Response, user: SessionUser) {
   const token = jwt.sign(user, JWT_SECRET, { expiresIn: "12h" });
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
-    // In production behind HTTPS on Azure this should be `secure: true`;
-    // left false here so local http:// dev keeps working.
-    secure: false,
+    secure: COOKIE_SECURE,
     maxAge: 12 * 60 * 60 * 1000,
   });
 }

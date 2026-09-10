@@ -54,6 +54,32 @@ the seeded staff members. Pick one to sign in as that role; no password
 needed locally. Real deployments would replace `/api/auth/dev-*` with an
 Entra ID token exchange feeding the same `req.user` shape.
 
+## Deploying a test instance (Render)
+
+`render.yaml` at the repo root is a Render "Blueprint" that provisions
+the database, API, and frontend together in one step. This is a
+throwaway test deployment (still the dev-login stub, free-tier
+Postgres) so IMPEX staff can click a real link — not the eventual Azure
+production home from spec Section 7.
+
+1. Sign up / log in at [render.com](https://render.com) (GitHub login
+   is fastest — it needs read access to this repo to deploy from it).
+2. **New** → **Blueprint** → pick this repository → select the branch
+   you want live (e.g. `claude/impex-job-card-phase-1-c0avtj`, or
+   `main` once the PR is merged).
+3. Render reads `render.yaml` and shows three resources — the Postgres
+   database, `impex-garage-api`, `impex-garage-web` — click **Apply**.
+4. Wait for all three to finish deploying (a few minutes; the API step
+   runs migrations + seeds the dev users on boot). Open the
+   `impex-garage-web` service's URL — that's the link to send IMPEX.
+
+Notes:
+- Free-tier web services spin down after inactivity, so the first
+  request after a quiet period can take ~30-50s to wake up.
+- Free-tier Postgres on Render expires after 90 days — fine for a test
+  round, not for anything long-lived.
+- Pushing to the deployed branch auto-redeploys.
+
 ## Seeded dev users
 
 | Name | Role | Floor |
