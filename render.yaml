@@ -36,12 +36,15 @@ services:
     rootDir: web
     buildCommand: npm install && npm run build
     staticPublishPath: dist
+    # VITE_API_URL is baked into the built JS at build time (Vite env vars
+    # aren't readable at runtime) — the frontend calls the API directly
+    # cross-origin; auth.ts's COOKIE_SECURE=true on the API makes the
+    # session cookie SameSite=None so it's sent on those requests.
+    envVars:
+      - key: VITE_API_URL
+        value: "https://impex-garage-api.onrender.com"
     routes:
-      # Proxied server-side by Render, so the browser sees everything as
-      # same-origin — no CORS, no cross-site cookie handling needed.
-      - type: rewrite
-        source: /api/*
-        destination: https://impex-garage-api.onrender.com/api/:splat
+      # SPA fallback so a hard refresh on e.g. /floor still loads the app.
       - type: rewrite
         source: /*
         destination: /index.html

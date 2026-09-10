@@ -23,23 +23,26 @@ declare global {
   }
 }
 
-// Set COOKIE_SECURE=true wherever the app is served over https (Render,
-// Azure, ...) so the session cookie gets the Secure flag; left unset for
-// local http:// dev.
+// Set COOKIE_SECURE=true wherever the app is served over https. The
+// frontend and API are separate origins in that deployment (e.g. Render's
+// two onrender.com subdomains), so the cookie also needs SameSite=None to
+// be sent on those cross-origin requests — browsers only allow None when
+// Secure is also set, which is exactly when COOKIE_SECURE is true. Local
+// dev keeps Lax/non-secure since http:// can't use SameSite=None at all.
 const COOKIE_SECURE = process.env.COOKIE_SECURE === "true";
 
 export function issueSessionCookie(res: Response, user: SessionUser) {
   const token = jwt.sign(user, JWT_SECRET, { expiresIn: "12h" });
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: COOKIE_SECURE ? "none" : "lax",
     secure: COOKIE_SECURE,
     maxAge: 12 * 60 * 60 * 1000,
   });
 }
 
 export function clearSessionCookie(res: Response) {
-  res.clearCookie(COOKIE_NAME);
+  res.clearCookie(COOKIE_NAME, { sameSite: COOKIE_SECURE ? "none" : "lax", secure: COOKIE_SECURE });
 }
 
 // Reads the session cookie set by the dev-login route (or, once Entra ID

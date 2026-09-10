@@ -1,7 +1,13 @@
 import { Job, PartsRequisition, SessionUser } from "./types";
 
+// Empty by default: local dev goes through Vite's dev-server proxy
+// (vite.config.ts) so a relative /api path is enough. In production the
+// frontend and API are separate services with different origins, so this
+// is baked in at build time to the API's absolute URL — see render.yaml.
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_BASE}/api${path}`, {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     ...options,
