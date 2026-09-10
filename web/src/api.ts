@@ -1,4 +1,12 @@
-import { Job, PartsRequisition, SessionUser } from "./types";
+import {
+  AccountingJob,
+  AccountingJobDetail,
+  Job,
+  ManagementDashboard,
+  PartsQueueItem,
+  PartsRequisition,
+  SessionUser,
+} from "./types";
 
 // Empty by default: local dev goes through Vite's dev-server proxy
 // (vite.config.ts) so a relative /api path is enough. In production the
@@ -72,8 +80,31 @@ export const api = {
 
   createPartsRequisition: (jobId: string, partDescription: string, quantity: number) =>
     request<PartsRequisition>("/parts-requisitions", { method: "POST", body: JSON.stringify({ jobId, partDescription, quantity }) }),
-  listPartsRequisitions: (status?: string) =>
-    request<PartsRequisition[]>(`/parts-requisitions${status ? `?status=${status}` : ""}`),
-  updatePartsRequisition: (id: string, status: string) =>
+  listPartsQueue: (status?: string) =>
+    request<PartsQueueItem[]>(`/parts-requisitions${status ? `?status=${status}` : ""}`),
+  updatePartsStatus: (id: string, status: string) =>
     request<PartsRequisition>(`/parts-requisitions/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  setPartsCost: (id: string, unitCostUsd: number | null) =>
+    request<PartsRequisition>(`/parts-requisitions/${id}`, { method: "PATCH", body: JSON.stringify({ unitCostUsd }) }),
+
+  logContact: (jobId: string, method: string, note: string) =>
+    request<Job>(`/jobs/${jobId}/contact-log`, { method: "POST", body: JSON.stringify({ method, note }) }),
+
+  accountingSettings: () => request<{ laborRatePerHourUsd: number }>("/accounting/settings"),
+  setLaborRate: (laborRatePerHourUsd: number) =>
+    request<{ laborRatePerHourUsd: number }>("/accounting/settings", {
+      method: "PATCH",
+      body: JSON.stringify({ laborRatePerHourUsd }),
+    }),
+  accountingJobs: (params: { jobType?: string; billingStatus?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.jobType) qs.set("jobType", params.jobType);
+    if (params.billingStatus) qs.set("billingStatus", params.billingStatus);
+    return request<{ laborRatePerHourUsd: number; jobs: AccountingJob[] }>(`/accounting/jobs?${qs.toString()}`);
+  },
+  accountingJob: (id: string) =>
+    request<{ laborRatePerHourUsd: number; job: AccountingJobDetail }>(`/accounting/jobs/${id}`),
+  closeBilling: (id: string) => request<Job>(`/accounting/jobs/${id}/close-billing`, { method: "POST" }),
+
+  managementDashboard: () => request<ManagementDashboard>("/management/dashboard"),
 };

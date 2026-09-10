@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
-import { JobStatus, BlockerReason, QcStatus, AfterSalesStatus, Prisma } from "@prisma/client";
+import { JobStatus, BlockerReason, QcStatus, AfterSalesStatus, ContactMethod, Prisma } from "@prisma/client";
 import { prisma } from "../db";
 import { requireAuth, requireRole } from "../auth";
 import {
   CAN_CREATE_JOB,
   CAN_EDIT_INTAKE,
   CAN_FLAG_BLOCKER,
+  CAN_LOG_CONTACT,
   CAN_ROUTE_FLOOR,
   CAN_UPDATE_AFTER_SALES,
   CAN_UPDATE_FLOOR_TASK,
@@ -297,6 +298,29 @@ router.post("/:id/after-sales", requireRole(...CAN_UPDATE_AFTER_SALES), async (r
     data: { jobId: job.id, eventType: "AFTER_SALES_UPDATED", toValue: parsed.data.status, actorId: req.user!.id },
   });
   res.json(job);
+});
+
+// ---- Customer contact log (After-Sales) ----
+const contactLogSchema = z.object({
+  method: z.nativeEnum(ContactMethod),
+  note: z.string().trim().min(1),
+});
+
+router.post("/:id/contact-log", requireRole(...CAN_LOG_CONTACT), async (req, res) => {
+  const parsed = contactLogSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const job = await prisma.job.findUnique({ where: { id: req.params.id } });
+  if (!job) return res.status(404).json({ error: "Job not found" });
+
+  await prisma.customerContactLog.create({
+    data: { jobId: job.id, method: parsed.data.method, note: parsed.data.note, contactedById: req.user!.id },
+  });
+  await prisma.jobEvent.create({
+    data: { jobId: job.id, eventType: "CONTACT_LOGGED", toValue: parsed.data.method, actorId: req.user!.id },
+  });
+  const full = await prisma.job.findUnique({ where: { id: job.id }, include: jobInclude });
+  res.json(full);
 });
 
 // ---- Close job (final sign-off) ----

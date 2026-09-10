@@ -125,8 +125,34 @@ Three screens: Service Advisor intake, Floor Technician queue (per
 floor, touch-friendly), and a status lookup any role can use to check
 a car's current status, floor history, and event log.
 
-## Not built yet (later phases)
+## What's implemented (Phase 2 + 3)
 
-Parts Office queue dashboard, After-Sales live view, Accounting cost
-roll-up (Phase 2); Senior Management aggregate dashboard (Phase 3);
-IMAD integration + forecasting (Phase 4).
+Built ahead of schedule since neither needs IMAD (that's Phase 4 only):
+
+- **Parts Office queue** (`/parts`): cross-job requisition list, filter
+  by status, mark status, enter a unit cost per part. Visible to Parts
+  Office, Accounting, Senior Management, IT/Admin.
+- **After-Sales live view** (`/after-sales`): jobs that have finished
+  all floors, with a customer contact log (call/SMS/email/in-person +
+  note) — explicitly no cost data, per Section 5.
+- **Accounting cost roll-up** (`/accounting`): per-job labor cost
+  (hours already logged on the floor × a shop-wide $/hour rate) +
+  parts cost (manual unit cost, since IMAD isn't connected yet), split
+  by warranty/paid/insurance, plus a "close out billing" action.
+  **The $/hour labor rate is a placeholder (`$20`, editable right on
+  the Accounting screen) — IMPEX hasn't given a real figure yet.**
+- **Senior Management dashboard** (`/dashboard`): job volume,
+  jobs-per-floor, blocker frequency (both live and all-time — surfaces
+  recurring problems paper never could), average time per floor
+  (bottleneck indicator), and rolled-up cost totals.
+
+Cost data (parts unit cost, labor rate, roll-ups) is only ever returned
+to Accounting/Senior Management/IT-Admin — every other role's job data
+comes back with those fields stripped server-side, not just hidden in
+the UI (see `server/src/lib/jobInclude.ts`).
+
+## Not built yet
+
+**Phase 4**: IMAD integration (blocked on IMAD access — investigate
+export/database options per spec Section 6) + parts demand forecasting
+using accumulated job history.

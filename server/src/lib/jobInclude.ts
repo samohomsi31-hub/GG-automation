@@ -14,5 +14,28 @@ export const jobInclude = {
     },
   },
   events: { orderBy: { createdAt: Prisma.SortOrder.desc }, include: { actor: { select: { id: true, displayName: true } } } },
-  partsRequisitions: { orderBy: { createdAt: Prisma.SortOrder.desc } },
+  // Explicit select (no unitCostUsd) — this is the shape every non-cost
+  // route returns, so cost data simply never reaches a role that
+  // shouldn't see it (Section 5: only Accounting/Senior Management do).
+  // The dedicated accounting routes query PartsRequisition separately
+  // with unitCostUsd included.
+  partsRequisitions: {
+    orderBy: { createdAt: Prisma.SortOrder.desc },
+    select: {
+      id: true,
+      jobId: true,
+      floorTaskLogId: true,
+      floorRequested: true,
+      partDescription: true,
+      quantity: true,
+      status: true,
+      requestedById: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  },
+  contactLogs: {
+    orderBy: { createdAt: Prisma.SortOrder.desc },
+    include: { contactedBy: { select: { id: true, displayName: true } } },
+  },
 } satisfies Prisma.JobInclude;

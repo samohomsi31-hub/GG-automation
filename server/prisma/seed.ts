@@ -27,6 +27,15 @@ async function main() {
   }
   console.log(`Seeded ${users.size} dev users.`);
 
+  // Placeholder shop-wide labor rate — Accounting/IT can change this
+  // anytime from the Accounting screen, no redeploy needed.
+  await prisma.shopSettings.upsert({
+    where: { id: "default" },
+    update: {},
+    create: { id: "default", laborRatePerHourUsd: 20 },
+  });
+  console.log("Ensured default shop settings (labor rate placeholder: $20/hr).");
+
   const advisor = users.get("nabil.haddad@impex-garage.local")!;
   const floor1Tech = users.get("fadi.achkar@impex-garage.local")!;
   const floor2Tech = users.get("elie.bourjeily@impex-garage.local")!;

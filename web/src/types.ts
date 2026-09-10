@@ -13,6 +13,7 @@ export type BlockerReason = "PART" | "CUSTOMER_APPROVAL" | "INSURANCE_WARRANTY_A
 export type QcStatus = "PENDING" | "PASSED" | "FAILED";
 export type AfterSalesStatus = "NOT_READY" | "READY" | "HANDED_OFF";
 export type PartsRequisitionStatus = "REQUESTED" | "CONFIRMED_IN_STOCK" | "BACKORDERED" | "FULFILLED";
+export type ContactMethod = "CALL" | "SMS" | "EMAIL" | "IN_PERSON" | "OTHER";
 
 export interface SessionUser {
   id: string;
@@ -60,6 +61,78 @@ export interface PartsRequisition {
   quantity: number;
   status: PartsRequisitionStatus;
   createdAt: string;
+  // Only present when returned by /api/accounting or /api/parts-requisitions
+  // (the roles allowed to see cost) — absent on the general job endpoints.
+  unitCostUsd?: string | null;
+}
+
+export interface CustomerContactLog {
+  id: string;
+  jobId: string;
+  method: ContactMethod;
+  note: string;
+  createdAt: string;
+  contactedBy: { id: string; displayName: string };
+}
+
+export interface JobCost {
+  laborHours: number;
+  laborCost: number;
+  partsCost: number;
+  partsCostKnown: boolean;
+  totalCost: number;
+}
+
+export interface AccountingJob {
+  id: string;
+  jobNumber: string;
+  plate: string;
+  customerName: string;
+  jobType: JobType;
+  status: JobStatus;
+  qcStatus: QcStatus;
+  billingClosedAt: string | null;
+  createdAt: string;
+  cost: JobCost;
+}
+
+export interface AccountingJobDetail extends AccountingJob {
+  createdBy: { id: string; displayName: string };
+  floorTaskLogs: {
+    id: string;
+    floor: number;
+    enteredAt: string;
+    exitedAt: string | null;
+    technicians: { hoursLogged: string | null; user: { id: string; displayName: string } }[];
+  }[];
+  partsRequisitions: { id: string; partDescription: string; quantity: number; unitCostUsd: string | null; status: PartsRequisitionStatus }[];
+}
+
+export interface PartsQueueItem {
+  id: string;
+  jobId: string;
+  floorRequested: number;
+  partDescription: string;
+  quantity: number;
+  status: PartsRequisitionStatus;
+  unitCostUsd: string | null;
+  createdAt: string;
+  job: { id: string; jobNumber: string; plate: string; customerName: string };
+  requestedBy: { id: string; displayName: string };
+}
+
+export interface ManagementDashboard {
+  generatedAt: string;
+  jobsByStatus: { status: JobStatus; count: number }[];
+  jobsByFloor: { floor: number; count: number }[];
+  jobsToday: number;
+  jobsLast7d: number;
+  liveBlockersByReason: { reason: BlockerReason | null; count: number }[];
+  historicalBlockersByReason: { reason: string | null; count: number }[];
+  avgHoursPerFloor: { floor: number; avgHours: number | null; completedVisits: number }[];
+  laborRatePerHourUsd: number;
+  costLast7dUsd: number;
+  costLast30dUsd: number;
 }
 
 export interface Job {
@@ -87,4 +160,5 @@ export interface Job {
   floorTaskLogs: FloorTaskLog[];
   events: JobEvent[];
   partsRequisitions: PartsRequisition[];
+  contactLogs: CustomerContactLog[];
 }

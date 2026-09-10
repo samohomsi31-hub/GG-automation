@@ -75,6 +75,17 @@ enum JobEventType {
   CLOSED
   PARTS_REQUESTED
   PARTS_STATUS_CHANGED
+  PARTS_COST_UPDATED
+  CONTACT_LOGGED
+  BILLING_CLOSED
+}
+
+enum ContactMethod {
+  CALL
+  SMS
+  EMAIL
+  IN_PERSON
+  OTHER
 }
 
 // A staff member. entraObjectId is null for dev-stub accounts and gets
@@ -93,10 +104,13 @@ model User {
 
   createdJobs        Job[]              @relation("JobCreatedBy")
   qcJobs             Job[]              @relation("JobQcBy")
+  billingClosedJobs  Job[]              @relation("JobBillingClosedBy")
   floorTaskLogsOpened FloorTaskLog[]    @relation("FloorTaskLogOpenedBy")
   floorAssignments   FloorTaskLogTechnician[]
   jobEvents          JobEvent[]
   partsRequisitions  PartsRequisition[]
+  contactLogs        CustomerContactLog[]
+  shopSettingsEdits  ShopSettings[]
 
   @@map("users")
 }
@@ -130,6 +144,12 @@ model Job {
 
   afterSalesStatus AfterSalesStatus @default(NOT_READY)
 
+  // Accounting's "close out billing" (Section 5) — separate from qcStatus/
+  // status since QC passing and billing being settled are different steps.
+  billingClosedAt   DateTime?
+  billingClosedById String?
+  billingClosedBy   User?     @relation("JobBillingClosedBy", fields: [billingClosedById], references: [id])
+
   createdById String
   createdBy   User   @relation("JobCreatedBy", fields: [createdById], references: [id])
 
@@ -140,6 +160,7 @@ model Job {
   floorTaskLogs     FloorTaskLog[]
   events            JobEvent[]
   partsRequisitions PartsRequisition[]
+  contactLogs       CustomerContactLog[]
 
   @@index([status])
   @@index([currentFloor])
@@ -229,6 +250,11 @@ model PartsRequisition {
   quantity        Int    @default(1)
   status          PartsRequisitionStatus @default(REQUESTED)
 
+  // Manual entry (Section 6: no IMAD integration until Phase 4) so the
+  // Phase 2 cost roll-up has real parts figures in the meantime — total
+  // cost for this line is unitCostUsd * quantity.
+  unitCostUsd Decimal? @db.Decimal(10, 2)
+
   requestedById String
   requestedBy   User   @relation(fields: [requestedById], references: [id])
 
@@ -238,4 +264,39 @@ model PartsRequisition {
   @@index([status])
   @@index([jobId])
   @@map("parts_requisitions")
+}
+
+// After-Sales' customer contact history for a job (Section 5: "Update
+// customer contact log"). Separate from JobEvent since this is
+// customer-facing communication, not an internal state change.
+model CustomerContactLog {
+  id    String @id @default(uuid())
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  method ContactMethod
+  note   String
+
+  contactedById String
+  contactedBy   User   @relation(fields: [contactedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([jobId, createdAt])
+  @@map("customer_contact_logs")
+}
+
+// Single-row shop-wide settings. Starts with one seeded row (id: "default").
+// laborRatePerHourUsd is a placeholder until IMPEX gives a real number —
+// editable via Accounting's screen, not hardcoded, so changing it never
+// needs a redeploy.
+model ShopSettings {
+  id                  String   @id
+  laborRatePerHourUsd Decimal  @db.Decimal(8, 2)
+  updatedAt           DateTime @updatedAt
+
+  updatedById String?
+  updatedBy   User?   @relation(fields: [updatedById], references: [id])
+
+  @@map("shop_settings")
 }

@@ -46,6 +46,40 @@ export const CAN_CREATE_PARTS_REQUISITION: Role[] = [
   Role.IT_ADMIN,
 ];
 
+// Full requisition queue (across all jobs, including cost) — narrower
+// than "can create one for my own job" above.
+export const CAN_VIEW_PARTS_QUEUE: Role[] = [
+  Role.PARTS_OFFICE,
+  Role.ACCOUNTING,
+  Role.SENIOR_MANAGEMENT,
+  Role.IT_ADMIN,
+];
+
+export const CAN_SET_PARTS_COST: Role[] = [
+  Role.PARTS_OFFICE,
+  Role.ACCOUNTING,
+  Role.IT_ADMIN,
+];
+
+export const CAN_LOG_CONTACT: Role[] = [
+  Role.AFTER_SALES,
+  Role.SERVICE_ADVISOR,
+  Role.IT_ADMIN,
+];
+
+// Section 5: Accounting has "full cost data", Senior Management sees
+// "all data, aggregate views" — everyone else gets no cost data at all
+// (enforced by simply never including cost fields in the general
+// jobInclude used by other routes, not just by gating these routes).
+export const CAN_VIEW_COST_DATA: Role[] = [
+  Role.ACCOUNTING,
+  Role.SENIOR_MANAGEMENT,
+  Role.IT_ADMIN,
+];
+
+export const CAN_CLOSE_BILLING: Role[] = [Role.ACCOUNTING, Role.IT_ADMIN];
+export const CAN_UPDATE_SHOP_SETTINGS: Role[] = [Role.ACCOUNTING, Role.IT_ADMIN];
+
 // Everyone authenticated can read job status/search — that's the
 // "basic status view any role can check" requirement. No role list
 // needed for those routes.

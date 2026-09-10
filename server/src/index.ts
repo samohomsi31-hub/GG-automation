@@ -7,6 +7,8 @@ import authRoutes from "./routes/auth";
 import jobRoutes from "./routes/jobs";
 import floorRoutes from "./routes/floors";
 import partsRoutes from "./routes/parts";
+import accountingRoutes from "./routes/accounting";
+import managementRoutes from "./routes/management";
 
 const app = express();
 
@@ -20,6 +22,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/floors", floorRoutes);
 app.use("/api/parts-requisitions", partsRoutes);
+app.use("/api/accounting", accountingRoutes);
+app.use("/api/management", managementRoutes);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
