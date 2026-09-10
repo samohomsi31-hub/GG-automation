@@ -93,7 +93,7 @@ function JobDetail({ job, onBack, onChanged }: { job: Job; onBack: () => void; o
     }
   }
 
-  const canQc = user?.role === "SERVICE_ADVISOR" || user?.role === "IT_ADMIN";
+  const canQc = user?.role === "SENIOR_MANAGEMENT" || user?.role === "IT_ADMIN";
   const canAfterSales = user?.role === "AFTER_SALES" || user?.role === "SERVICE_ADVISOR" || user?.role === "IT_ADMIN";
 
   return (

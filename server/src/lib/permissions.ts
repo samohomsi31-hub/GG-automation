@@ -27,7 +27,11 @@ export const CAN_FLAG_BLOCKER: Role[] = [
   Role.IT_ADMIN,
 ];
 
-export const CAN_UPDATE_QC: Role[] = [Role.SERVICE_ADVISOR, Role.IT_ADMIN];
+// QC sign-off and job-card close are done by the head of garage
+// (Senior Management), not the Service Advisor who took the intake —
+// they weren't the one who saw the actual repair. Note this is a
+// deliberate exception to Section 5's "Senior Management: read-only".
+export const CAN_UPDATE_QC: Role[] = [Role.SENIOR_MANAGEMENT, Role.IT_ADMIN];
 
 export const CAN_UPDATE_AFTER_SALES: Role[] = [
   Role.AFTER_SALES,
