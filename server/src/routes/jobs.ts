@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { JobStatus, BlockerReason, QcStatus, AfterSalesStatus, ContactMethod, Prisma } from "@prisma/client";
 import { prisma } from "../db";
-import { requireAuth, requireRole } from "../auth";
+import { requireAuth, requireQcSigner, requireRole } from "../auth";
 import {
   CAN_CREATE_JOB,
   CAN_EDIT_INTAKE,
@@ -11,7 +11,6 @@ import {
   CAN_ROUTE_FLOOR,
   CAN_UPDATE_AFTER_SALES,
   CAN_UPDATE_FLOOR_TASK,
-  CAN_UPDATE_QC,
 } from "../lib/permissions";
 import { nextJobNumber } from "../lib/jobNumber";
 import { jobInclude } from "../lib/jobInclude";
@@ -267,7 +266,7 @@ router.post("/:id/blocker/clear", requireRole(...CAN_FLAG_BLOCKER), async (req, 
 // ---- QC ----
 const qcSchema = z.object({ status: z.nativeEnum(QcStatus) });
 
-router.post("/:id/qc", requireRole(...CAN_UPDATE_QC), async (req, res) => {
+router.post("/:id/qc", requireQcSigner, async (req, res) => {
   const parsed = qcSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
@@ -324,7 +323,7 @@ router.post("/:id/contact-log", requireRole(...CAN_LOG_CONTACT), async (req, res
 });
 
 // ---- Close job (final sign-off) ----
-router.post("/:id/close", requireRole(...CAN_UPDATE_QC), async (req, res) => {
+router.post("/:id/close", requireQcSigner, async (req, res) => {
   const job = await prisma.job.findUnique({ where: { id: req.params.id } });
   if (!job) return res.status(404).json({ error: "Job not found" });
   if (job.status !== JobStatus.DONE) {

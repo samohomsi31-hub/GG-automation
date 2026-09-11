@@ -21,6 +21,7 @@ export interface SessionUser {
   email: string;
   role: Role;
   assignedFloor: number | null;
+  canSignQc: boolean;
 }
 
 export interface FloorTaskLogTechnician {

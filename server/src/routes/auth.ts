@@ -13,7 +13,7 @@ router.get("/dev-users", async (_req, res) => {
   const users = await prisma.user.findMany({
     where: { active: true },
     orderBy: [{ role: "asc" }, { displayName: "asc" }],
-    select: { id: true, displayName: true, email: true, role: true, assignedFloor: true },
+    select: { id: true, displayName: true, email: true, role: true, assignedFloor: true, canSignQc: true },
   });
   res.json(users);
 });
@@ -31,6 +31,7 @@ router.post("/dev-login", async (req, res) => {
     email: user.email,
     role: user.role,
     assignedFloor: user.assignedFloor,
+    canSignQc: user.canSignQc,
   });
   res.json({ ok: true });
 });

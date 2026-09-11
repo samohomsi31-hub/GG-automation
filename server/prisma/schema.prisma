@@ -99,6 +99,12 @@ model User {
   email         String   @unique
   role          Role
   assignedFloor Int? // set for FLOOR_TECH users normally stationed on one floor
+  // QC sign-off / job-card close is done by the head of garage (the
+  // Service Manager), a specific person rather than a whole Role tier —
+  // doesn't fit cleanly into Section 5's 7 categories, so it's a
+  // per-user flag instead of forcing them into SENIOR_MANAGEMENT.
+  // IT_ADMIN can always do this regardless of this flag.
+  canSignQc     Boolean  @default(false)
   active        Boolean  @default(true)
   createdAt     DateTime @default(now())
 

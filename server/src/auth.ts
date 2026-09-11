@@ -12,6 +12,7 @@ export interface SessionUser {
   email: string;
   role: Role;
   assignedFloor: number | null;
+  canSignQc: boolean;
 }
 
 declare global {
@@ -65,6 +66,7 @@ export async function attachUser(req: Request, _res: Response, next: NextFunctio
         email: dbUser.email,
         role: dbUser.role,
         assignedFloor: dbUser.assignedFloor,
+        canSignQc: dbUser.canSignQc,
       };
     }
   } catch {
@@ -86,4 +88,15 @@ export function requireRole(...roles: Role[]) {
     }
     next();
   };
+}
+
+// QC sign-off / job-card close: the designated head of garage (flagged
+// per-user, not tied to a Role — see User.canSignQc), or IT_ADMIN as
+// always-allowed fallback.
+export function requireQcSigner(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+  if (req.user.role !== Role.IT_ADMIN && !req.user.canSignQc) {
+    return res.status(403).json({ error: "Not permitted to sign off QC" });
+  }
+  next();
 }
