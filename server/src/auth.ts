@@ -1,0 +1,102 @@
+import { NextFunction, Request, Response } from "express";
+import jwt from "jsonwebtoken";
+import { Role } from "@prisma/client";
+import { prisma } from "./db";
+
+const JWT_SECRET = process.env.JWT_SECRET || "dev-only-secret-change-me";
+const COOKIE_NAME = "impex_session";
+
+export interface SessionUser {
+  id: string;
+  displayName: string;
+  email: string;
+  role: Role;
+  assignedFloor: number | null;
+  canSignQc: boolean;
+}
+
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      user?: SessionUser;
+    }
+  }
+}
+
+// Set COOKIE_SECURE=true wherever the app is served over https. The
+// frontend and API are separate origins in that deployment (e.g. Render's
+// two onrender.com subdomains), so the cookie also needs SameSite=None to
+// be sent on those cross-origin requests — browsers only allow None when
+// Secure is also set, which is exactly when COOKIE_SECURE is true. Local
+// dev keeps Lax/non-secure since http:// can't use SameSite=None at all.
+const COOKIE_SECURE = process.env.COOKIE_SECURE === "true";
+
+export function issueSessionCookie(res: Response, user: SessionUser) {
+  const token = jwt.sign(user, JWT_SECRET, { expiresIn: "12h" });
+  res.cookie(COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: COOKIE_SECURE ? "none" : "lax",
+    secure: COOKIE_SECURE,
+    maxAge: 12 * 60 * 60 * 1000,
+  });
+}
+
+export function clearSessionCookie(res: Response) {
+  res.clearCookie(COOKIE_NAME, { sameSite: COOKIE_SECURE ? "none" : "lax", secure: COOKIE_SECURE });
+}
+
+// Reads the session cookie set by the dev-login route (or, once Entra ID
+// SSO is wired up, by a real Entra token exchange) and attaches the user
+// to the request. Everything downstream — routes, permission checks —
+// only ever looks at req.user, so swapping the login mechanism later
+// doesn't touch the rest of the app.
+export async function attachUser(req: Request, _res: Response, next: NextFunction) {
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token) return next();
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as SessionUser;
+    // Re-check against the DB so a deactivated user is rejected immediately
+    // rather than riding out their token's remaining lifetime.
+    const dbUser = await prisma.user.findUnique({ where: { id: decoded.id } });
+    if (dbUser && dbUser.active) {
+      req.user = {
+        id: dbUser.id,
+        displayName: dbUser.displayName,
+        email: dbUser.email,
+        role: dbUser.role,
+        assignedFloor: dbUser.assignedFloor,
+        canSignQc: dbUser.canSignQc,
+      };
+    }
+  } catch {
+    // invalid/expired token: leave req.user unset
+  }
+  next();
+}
+
+export function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+  next();
+}
+
+export function requireRole(...roles: Role[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: "Not permitted for this role" });
+    }
+    next();
+  };
+}
+
+// QC sign-off / job-card close: the designated head of garage (flagged
+// per-user, not tied to a Role — see User.canSignQc), or IT_ADMIN as
+// always-allowed fallback.
+export function requireQcSigner(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+  if (req.user.role !== Role.IT_ADMIN && !req.user.canSignQc) {
+    return res.status(403).json({ error: "Not permitted to sign off QC" });
+  }
+  next();
+}

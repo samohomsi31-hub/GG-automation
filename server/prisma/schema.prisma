@@ -1,0 +1,308 @@
+// IMPEX Garage — Phase 1 data model. See the repo README for the
+// design rationale (why FloorTaskLog merges "floor history" and
+// "floor task log", the routing model, etc).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SERVICE_ADVISOR
+  FLOOR_TECH
+  PARTS_OFFICE
+  AFTER_SALES
+  ACCOUNTING
+  SENIOR_MANAGEMENT
+  IT_ADMIN
+}
+
+enum JobType {
+  WARRANTY
+  PAID
+  INSURANCE
+}
+
+enum JobStatus {
+  QUEUED
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  CLOSED
+}
+
+enum BlockerReason {
+  PART
+  CUSTOMER_APPROVAL
+  INSURANCE_WARRANTY_APPROVAL
+  OTHER_FLOOR
+  OTHER
+}
+
+enum QcStatus {
+  PENDING
+  PASSED
+  FAILED
+}
+
+enum AfterSalesStatus {
+  NOT_READY
+  READY
+  HANDED_OFF
+}
+
+enum PartsRequisitionStatus {
+  REQUESTED
+  CONFIRMED_IN_STOCK
+  BACKORDERED
+  FULFILLED
+}
+
+enum JobEventType {
+  CREATED
+  INTAKE_EDITED
+  FLOOR_ENTERED
+  FLOOR_EXITED
+  STATUS_CHANGED
+  BLOCKER_FLAGGED
+  BLOCKER_CLEARED
+  QC_UPDATED
+  AFTER_SALES_UPDATED
+  CLOSED
+  PARTS_REQUESTED
+  PARTS_STATUS_CHANGED
+  PARTS_COST_UPDATED
+  CONTACT_LOGGED
+  BILLING_CLOSED
+}
+
+enum ContactMethod {
+  CALL
+  SMS
+  EMAIL
+  IN_PERSON
+  OTHER
+}
+
+// A staff member. entraObjectId is null for dev-stub accounts and gets
+// populated once real Entra ID SSO is wired up (Phase 1 follow-up) —
+// the rest of the app only ever depends on `role`, never on how the
+// user authenticated.
+model User {
+  id            String   @id @default(uuid())
+  entraObjectId String?  @unique
+  displayName   String
+  email         String   @unique
+  role          Role
+  assignedFloor Int? // set for FLOOR_TECH users normally stationed on one floor
+  // QC sign-off / job-card close is done by the head of garage (the
+  // Service Manager), a specific person rather than a whole Role tier —
+  // doesn't fit cleanly into Section 5's 7 categories, so it's a
+  // per-user flag instead of forcing them into SENIOR_MANAGEMENT.
+  // IT_ADMIN can always do this regardless of this flag.
+  canSignQc     Boolean  @default(false)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  createdJobs        Job[]              @relation("JobCreatedBy")
+  qcJobs             Job[]              @relation("JobQcBy")
+  billingClosedJobs  Job[]              @relation("JobBillingClosedBy")
+  floorTaskLogsOpened FloorTaskLog[]    @relation("FloorTaskLogOpenedBy")
+  floorAssignments   FloorTaskLogTechnician[]
+  jobEvents          JobEvent[]
+  partsRequisitions  PartsRequisition[]
+  contactLogs        CustomerContactLog[]
+  shopSettingsEdits  ShopSettings[]
+
+  @@map("users")
+}
+
+// The Job / Repair Order — one persistent record per car visit (Section 4).
+// currentFloor + status reflect where the car is *right now*; the full
+// path is reconstructed from FloorTaskLog rows, not stored redundantly here.
+model Job {
+  id      String @id @default(uuid())
+  jobNumber String @unique // e.g. IMX-20260909-0001
+
+  vin          String?
+  plate        String
+  customerName String
+  customerPhone String?
+
+  intakeComplaint String
+  intakeCategory  String
+  jobType         JobType
+
+  currentFloor Int? // null once CLOSED
+  status       JobStatus @default(QUEUED)
+
+  blockerReasonCode BlockerReason?
+  blockerNote       String?
+
+  qcStatus QcStatus @default(PENDING)
+  qcById   String?
+  qcBy     User?    @relation("JobQcBy", fields: [qcById], references: [id])
+  qcAt     DateTime?
+
+  afterSalesStatus AfterSalesStatus @default(NOT_READY)
+
+  // Accounting's "close out billing" (Section 5) — separate from qcStatus/
+  // status since QC passing and billing being settled are different steps.
+  billingClosedAt   DateTime?
+  billingClosedById String?
+  billingClosedBy   User?     @relation("JobBillingClosedBy", fields: [billingClosedById], references: [id])
+
+  createdById String
+  createdBy   User   @relation("JobCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  closedAt  DateTime?
+
+  floorTaskLogs     FloorTaskLog[]
+  events            JobEvent[]
+  partsRequisitions PartsRequisition[]
+  contactLogs       CustomerContactLog[]
+
+  @@index([status])
+  @@index([currentFloor])
+  @@index([plate])
+  @@index([vin])
+  @@map("jobs")
+}
+
+// One row per floor visit — merges the "floor history" and "floor task
+// log" from Section 4 into a single append-only table: entered_at/
+// exited_at give the routing timeline, technicians/hours/notes give the
+// work log, for the same visit.
+model FloorTaskLog {
+  id    String @id @default(uuid())
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  floor  Int
+  status JobStatus @default(QUEUED) // this visit's own status, independent of later visits
+
+  enteredAt           DateTime  @default(now())
+  exitedAt            DateTime?
+  completionTimestamp DateTime?
+  notes               String?
+
+  openedById String
+  openedBy   User   @relation("FloorTaskLogOpenedBy", fields: [openedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  technicians       FloorTaskLogTechnician[]
+  partsRequisitions PartsRequisition[]
+
+  @@index([jobId])
+  @@index([floor, status])
+  @@map("floor_task_logs")
+}
+
+// Many-to-many: a floor visit can have multiple technicians, each with
+// their own logged hours ("technician(s) assigned, hours logged").
+model FloorTaskLogTechnician {
+  id             String       @id @default(uuid())
+  floorTaskLogId String
+  floorTaskLog   FloorTaskLog @relation(fields: [floorTaskLogId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  hoursLogged    Decimal?     @db.Decimal(5, 2)
+
+  @@unique([floorTaskLogId, userId])
+  @@map("floor_task_log_technicians")
+}
+
+// Append-only audit trail across the whole job — status/floor/blocker/QC/
+// after-sales changes all land here so any team can see "what happened
+// and when" without re-deriving it from other tables.
+model JobEvent {
+  id    String @id @default(uuid())
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  eventType JobEventType
+  fromValue String?
+  toValue   String?
+  note      String?
+
+  actorId String
+  actor   User   @relation(fields: [actorId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([jobId, createdAt])
+  @@map("job_events")
+}
+
+// Manual-entry parts requisition (Phase 1: no IMAD integration — Section 6).
+model PartsRequisition {
+  id    String @id @default(uuid())
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  floorTaskLogId String?
+  floorTaskLog   FloorTaskLog? @relation(fields: [floorTaskLogId], references: [id])
+
+  floorRequested  Int
+  partDescription String
+  quantity        Int    @default(1)
+  status          PartsRequisitionStatus @default(REQUESTED)
+
+  // Manual entry (Section 6: no IMAD integration until Phase 4) so the
+  // Phase 2 cost roll-up has real parts figures in the meantime — total
+  // cost for this line is unitCostUsd * quantity.
+  unitCostUsd Decimal? @db.Decimal(10, 2)
+
+  requestedById String
+  requestedBy   User   @relation(fields: [requestedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([jobId])
+  @@map("parts_requisitions")
+}
+
+// After-Sales' customer contact history for a job (Section 5: "Update
+// customer contact log"). Separate from JobEvent since this is
+// customer-facing communication, not an internal state change.
+model CustomerContactLog {
+  id    String @id @default(uuid())
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  method ContactMethod
+  note   String
+
+  contactedById String
+  contactedBy   User   @relation(fields: [contactedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([jobId, createdAt])
+  @@map("customer_contact_logs")
+}
+
+// Single-row shop-wide settings. Starts with one seeded row (id: "default").
+// laborRatePerHourUsd is a placeholder until IMPEX gives a real number —
+// editable via Accounting's screen, not hardcoded, so changing it never
+// needs a redeploy.
+model ShopSettings {
+  id                  String   @id
+  laborRatePerHourUsd Decimal  @db.Decimal(8, 2)
+  updatedAt           DateTime @updatedAt
+
+  updatedById String?
+  updatedBy   User?   @relation(fields: [updatedById], references: [id])
+
+  @@map("shop_settings")
+}

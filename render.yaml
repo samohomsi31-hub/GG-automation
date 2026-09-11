@@ -1,0 +1,50 @@
+databases:
+  - name: impex-garage-db
+    plan: free
+    databaseName: impex_garage
+    user: impex
+
+services:
+  - type: web
+    name: impex-garage-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install && npx prisma generate && npm run build
+    # migrate + (idempotent) seed on every boot, so a fresh DB always has
+    # the dev-login users; safe to re-run since seed uses upsert and only
+    # creates sample jobs when the jobs table is empty.
+    startCommand: npx prisma migrate deploy && npx tsx prisma/seed.ts && node dist/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: impex-garage-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: CORS_ORIGIN
+        value: "https://impex-garage-web.onrender.com"
+      - key: PORT
+        value: "4000"
+
+  - type: web
+    name: impex-garage-web
+    runtime: static
+    rootDir: web
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    # VITE_API_URL is baked into the built JS at build time (Vite env vars
+    # aren't readable at runtime) — the frontend calls the API directly
+    # cross-origin; auth.ts's COOKIE_SECURE=true on the API makes the
+    # session cookie SameSite=None so it's sent on those requests.
+    envVars:
+      - key: VITE_API_URL
+        value: "https://impex-garage-api.onrender.com"
+    routes:
+      # SPA fallback so a hard refresh on e.g. /floor still loads the app.
+      - type: rewrite
+        source: /*
+        destination: /index.html
